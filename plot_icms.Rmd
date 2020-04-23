@@ -1,0 +1,555 @@
+---
+title: "ICMS"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: rows
+  
+
+runtime: shiny
+---
+
+```{r opcao}
+options(scipen=999)
+```
+
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+library(shiny)
+library(tidyverse)
+library(readxl)
+library(DT)
+library(plotly)
+library(lubridate)
+library(shiny)
+
+```
+
+
+
+```{r funcoes}
+
+# criar funções para apresentar a unidade de medida e converter automaticamente para milhares, milhões, bilhões e trilhões
+
+escala <- function(x){case_when(
+  abs(x) < 1000 ~ "",
+  abs(x) >= 1000  & abs(x) < 1000000 ~ "K",
+  abs(x) >= 1000000  & abs(x) < 1000000000 ~ "Mi",
+  abs(x) >= 1000000000  & abs(x) < 1000000000000 ~ "Bi",
+  abs(x) >= 1000000000000  & abs(x) < 1000000000000000 ~ "trilhão",
+  TRUE ~ "maior que trilhão"
+)}
+
+
+
+
+divisor <- function(x){case_when(
+  abs(x) < 1000 ~ x,
+  abs(x) >= 1000  & abs(x) < 1000000 ~ round(x/1000,digits = 2),
+  abs(x) >= 1000000  & abs(x) < 1000000000 ~ round(x/1000000, digits = 2),
+  abs(x) >= 1000000000  & abs(x) < 1000000000000 ~ round (x/1000000000, digits = 2),
+  abs(x) >= 1000000000000  & abs(x) < 1000000000000000 ~ round (x/1000000000000, digits = 2),
+  TRUE ~ x
+)}
+```
+
+```{r}
+
+# importar a base de dados
+
+# excluir as UF que não disponibilizaram o demonstrativo no SICONFI
+
+df_icms<-read_csv("df_icms2.csv") %>% filter (uf != "RR")
+
+df_icms_bimestre<- read_csv("df_icms_bimestre.csv") %>% filter (uf != "RR")
+```
+
+
+
+
+Arrecadação em todo o país
+=============================================
+Row {data-height=30}
+-----------------------------------------------------------------------
+
+### arrecadação março e abril 2019
+```{r arrecadação 2019 br}
+flexdashboard::renderValueBox({
+  
+    valor <-  sum(df_icms_bimestre$'2019') 
+    valueBox(
+    # utilizar funções divisor() e escala () para converter automaticamente valores para milhar, milhão, bilhão...  
+    paste0("R$ ", divisor(valor)," ",  escala(valor)),
+    # lembrar de ajustar manualamente os períodos. Pensei em criar um slider para definir os períodos, mas talvez o slider dificultasse a compreensão do usuário do dashboard
+    "março e abril 2019",
+    color = "grey"
+      
+    )
+  })
+
+```
+
+
+### arrecadação março e abril 2020
+```{r arrecadação 2020 br}
+flexdashboard::renderValueBox({
+  
+  valor <-  sum(df_icms_bimestre$'2020') 
+    valueBox(
+    # utilizar funções divisor() e escala () para converter automaticamente valores para milhar, milhão, bilhão...  
+   paste0("R$ ", divisor(valor)," ",  escala(valor)),
+   # lembrar de ajustar manualamente os períodos. Pensei em criar um slider para definir os períodos, mas talvez o slider dificultasse a compreensão do usuário do dashboard
+    "março e abril 2020",
+    color = "purple"
+    )
+  })
+
+```
+
+### evolucao em reais
+```{r evolucao em reais br }
+
+
+flexdashboard::renderValueBox({
+    
+    valor <- sum(df_icms_bimestre$reais)
+    valueBox(
+    # utilizar funções divisor() e escala () para converter automaticamente valores para milhar, milhão, bilhão...  
+    paste0("R$ ",  divisor(valor), " ", escala(valor)), 
+      "evolução em R$ ", 
+    # ajustar a cor de acordo com o valor da evolução em reais
+      color = if (valor <= 0) "red" else "blue"
+    )
+  })
+
+```
+
+
+### evolucao percentual
+```{r evolucao percentual br}
+flexdashboard::renderValueBox({
+  # calcular a evolução percentual entre os períodos
+  percentual <- round(((sum(df_icms_bimestre$'2020')-sum(df_icms_bimestre$'2019'))/sum(df_icms_bimestre$'2019'))*100, digits = 1)
+  valueBox(
+      paste0(percentual,"%"),
+      "evolução percentual ",
+    # ajustar a cor de acordo com o valor da evolução percentual
+      color = if (percentual <= 0) "red" else "blue"
+    )
+  })
+
+```
+
+
+
+
+Row
+--------------------------------------------------------------------------
+
+
+### histórico em bilhões de reais nominais
+
+
+```{r historico br}
+renderPlotly({
+  # criar df_br para consolidar arrecadação mês a mês em todo o país.
+  df_br<-df_icms %>% group_by(mes_ano_end) %>% summarise(valor = round(sum(valor)/1000000000, digits = 2))
+
+ historico<- ggplot( df_br, aes(  x= mes_ano_end  , y=valor)) +
+    geom_line() +
+    theme_classic() +
+    ylab("") +
+    xlab("") +
+    # https://ggplot2.tidyverse.org/reference/scale_date.html
+    # apresentar os anos 2015, 2016 , 2017, 2018, 2019 e 2020 na escal do eixo X
+    scale_x_date(date_breaks = "1 year", date_labels = "%Y")
+  
+ggplotly(historico)  
+})
+
+
+```
+
+
+
+### comparativo anual em bilhões de reais nominais
+
+
+
+```{r comparativo anual br}
+# https://plotly.com/r/cumulative-animations/
+
+
+
+
+
+renderPlotly({
+df_ano<-df_icms   %>%  group_by(exercicio, mes_ano) %>% summarise(valor = round(sum(valor)/1000000000, digits = 2)) %>% mutate (mes = month(mes_ano))
+
+# ajustar ordem dos fatores para plotar cada exercício em uma linha 
+df_ano$mes <- factor(df_ano$mes)
+df_ano$exercicio <- as.numeric(df_ano$exercicio)
+df_ano$mes<- as.numeric(df_ano$mes)
+
+#https://forcats.tidyverse.org/reference/fct_rev.html
+df_ano$exercicio<- fct_rev(factor(df_ano$exercicio))
+
+p<-ggplot() + geom_line(data = df_ano,aes(x = mes, y = valor, color = exercicio))+
+                        # criar escala de cor, com purple para o exercício mais recente e cinza para os demais exercícios (fica mais claro a medida que é mais antigo)
+      scale_color_manual(breaks = levels(df_ano$exercicio),
+                        values=c("purple", "gray1", "gray20", "gray40", "gray60", "gray80"))+
+                        theme_classic()+
+                        ylab("") +
+                        xlab("") +
+                        # https://ggplot2.tidyverse.org/reference/scale_date.html
+                        # apresentar apenas os meses de "abril", "agosto", "dezembro" na escala do eixo X
+                        scale_x_continuous(breaks=c(4,8,12),
+                                          labels=c("abril", "agosto", "dezembro"))
+                      
+
+ggplotly(p)
+
+
+})
+```
+
+
+### ranking em milhões de reais nominais {.no-mobile}
+
+```{r ranking reais}
+renderPlotly({
+  
+#   {.no-mobile} esse item não aparece em dispositivo mobile
+  
+# converter em reais  
+
+mi_reais <- df_icms_bimestre %>% mutate (reais = round(reais/1000000, digits = 0) )
+
+
+ preais<- ggplot( mi_reais, aes(  x= reorder (uf,reais),  y=reais)) +
+    # ajustar a cor do segmento e do ponto. Vermelho para negativo, azul para positivo ou zero
+    geom_segment( aes(xend=uf, yend=0),  color=if_else(mi_reais$reais > 0, "blue", "red")) +
+    geom_point( size=2, color=if_else(mi_reais$reais > 0, "blue", "red")) +
+    geom_text(aes(label =  reais), size =3, nudge_y =  if_else(mi_reais$reais > 0, 90, -90) )+
+    coord_flip() +
+    theme_classic() +
+        ylab("") +
+    xlab("") 
+  
+ggplotly(preais)  
+})
+
+```
+
+
+
+
+### ranking em percentual {.no-mobile}
+
+
+```{r ranking em percentual}
+renderPlotly({
+  
+ 
+ pcent<- ggplot( df_icms_bimestre, aes(  x= reorder (uf,  percentual), y=percentual)) +
+   # ajustar a cor do segmento e do ponto. Vermelho para negativo, azul para positivo ou zero
+   geom_segment( aes(xend=uf, yend=0),  color=if_else(df_icms_bimestre$percentual > 0, "blue", "red")) +
+    geom_point( size=2, color=if_else(df_icms_bimestre$percentual > 0, "blue", "red")) +
+    # nudge_y para colocar o label à esquerda quando o percentual for negativo ou à direita do point quando o percentual for positivo
+    geom_text(aes(label = paste0(percentual, "%")), size =3, nudge_y = if_else(df_icms_bimestre$percentual > 0, 6, -6) )+
+    coord_flip() +
+    theme_classic() +
+    ylab("") +
+    xlab("") 
+  
+ggplotly(pcent)  
+
+
+
+})
+
+```
+
+
+
+Arrecadação por UF
+======================================================================
+
+
+Selecione a UF {.sidebar data-height=30}
+-------------------------------------
+
+
+
+
+
+
+```{r input$uf}
+
+# criar filtro para selecionar a UF
+
+selectInput("uf", label ="", 
+    choices = unique(df_icms_bimestre$uf), 
+    selected = "SC")
+
+
+
+```
+
+
+
+
+```{r reactive bimestre}
+# criar função reactive para reagir a alterações do filtro da UF
+
+bimestre <- reactive({df_icms_bimestre %>% filter (uf == input$uf)})
+```
+
+
+
+
+Row {data-height=30}
+-----------------------------------------------------------------------
+
+
+
+### arrecadação março e abril 2019
+```{r arrecadação 2019 uf}
+flexdashboard::renderValueBox({
+  
+  valor <- bimestre()$'2019'
+    valueBox(
+    # utilizar funções divisor() e escala () para converter automaticamente valores para milhar, milhão, bilhão...    
+    paste0("R$ ", divisor(valor)," ",  escala(valor)),
+     # lembrar de ajustar manualamente os períodos.
+    "março e abril 2019",
+    color = "grey"
+      
+    )
+  })
+
+```
+
+
+### arrecadação março e abril 2020
+```{r arrecadação 2020 uf}
+flexdashboard::renderValueBox({
+  valor <- bimestre()$'2020'
+    valueBox(
+     # utilizar funções divisor() e escala () para converter automaticamente valores para milhar, milhão, bilhão...  
+    paste0("R$ ", divisor(valor)," ",  escala(valor)),
+     # lembrar de ajustar manualamente os períodos.
+    "março e abril 2020",
+    color = "purple" 
+    )
+  })
+
+```
+
+### evolucao em reais
+```{r evolucao em reais uf}
+
+
+flexdashboard::renderValueBox({
+  
+  valor<-bimestre()$reais
+    valueBox(
+       # utilizar funções divisor() e escala () para converter automaticamente valores para milhar, milhão, bilhão...  
+       paste0("R$ ",  divisor(valor), " ", escala(valor)), 
+       "evolução em R$", 
+       color = if (valor <= 0) "red" else "blue"
+    )
+  })
+
+```
+
+
+### evolucao percentual
+```{r evolucao percentual uf}
+flexdashboard::renderValueBox({
+    valueBox(
+       paste0(bimestre()$percentual,"%"),
+      "evolução percentual",
+      color = if (bimestre()$percentual<= 0) "red" else "blue"
+    )
+  })
+
+```
+
+Row
+-----------------------------------------------------------------------
+
+
+
+
+### comparativo anual em bilhões de reais nominais
+
+
+
+```{r comparativo anual}
+# https://plotly.com/r/cumulative-animations/
+
+
+
+
+
+renderPlotly({
+df_ano<-df_icms  %>% filter(uf == input$uf) %>%  group_by(exercicio, mes_ano) %>% summarise(valor = round(sum(valor)/1000000000, digits = 2)) %>% mutate (mes = month(mes_ano))
+
+
+#https://rpubs.com/Mentors_Ubiqum/ggplot_geom_line_1
+#ggplot: Draw a different line per year
+
+df_ano$mes <- factor(df_ano$mes)
+df_ano$exercicio <- as.numeric(df_ano$exercicio)
+df_ano$mes<- as.numeric(df_ano$mes)
+
+#https://forcats.tidyverse.org/reference/fct_rev.html
+df_ano$exercicio<- fct_rev(factor(df_ano$exercicio))
+
+p<-ggplot() + geom_line(data = df_ano, aes(x = mes, y = valor, color = exercicio))+
+      scale_color_manual(breaks = levels(df_ano$exercicio),
+                         values=c("purple", "gray1", "gray20", "gray40", "gray60", "gray80"))+
+                        theme_classic()+
+      scale_x_continuous(breaks=c(4,8,12),
+                        labels=c("abril", "agosto", "dezembro"))+
+      ylab("") +
+      xlab("")
+              
+                        
+                        #values=c("blue", rep("gray", length(unique(df_ano$exercicio))-1)))
+
+ggplotly(p)
+
+})
+```
+
+
+
+Row
+----------------------------------------------------
+
+### histórico em bilhões de reais nominais
+
+```{r serie temporal}
+
+
+renderPlotly({
+  
+hist_reais <- df_icms  %>% filter(uf == input$uf)%>% mutate (valor = round(valor/1000000000, digits = 2))
+  
+historico_uf<- ggplot( hist_reais , aes(  x= mes_ano_end  , y=valor)) +
+    geom_line() +
+    theme_classic() +
+    ylab("") +
+    xlab("") +
+# https://ggplot2.tidyverse.org/reference/scale_date.html
+    scale_x_date(date_breaks = "1 year", date_labels = "%Y")
+  
+ggplotly(historico_uf)  
+})
+
+
+
+
+
+
+```
+
+
+Tabela com os dados
+======================================================================
+
+```{r tabela}
+# apresentar tabela com todos os dados e com opção de download
+#opção para baixar todos os dados: dica de Cristian E. Nuno
+#https://github.com/rstudio/DT/issues/267#issuecomment-347030730
+#https://github.com/cenuno/shiny/tree/master/DT-Download-All-Rows-Button#customizing-dt-download-button
+DTOutput("dados")
+   
+ output$dados<- renderDT({
+  datatable((df_icms) %>% select(-rotulo, - mr, -mr_mes, - mes,- mes_ano, - populacao, - instituicao),
+      extensions = 'Buttons',
+      options = list( 
+                  dom = "Blfrtip",
+                  buttons = 
+                    list("copy", list(
+                      extend = "collection",
+                      buttons = c("csv", "excel", "pdf"),
+                      text = "Download" ) ),
+                  lengthMenu = list( c(-1, 20, 50),
+                                     c( "tudo",20, 50)),
+                  pageLength = 20 ))%>%
+                  formatRound("valor",
+                      digits = 2,
+                      interval = 3,
+                      mark = ".",
+                      dec.mark = ",")
+})
+```
+
+
+Gráfico com animação
+======================================================================
+
+
+
+```{r}
+# https://plotly.com/r/cumulative-animations/
+
+# omiti esse plot do dashboard. 
+
+renderPlotly({
+
+accumulate_by <- function(dat, var) {
+  var <- lazyeval::f_eval(var, dat)
+  lvls <- plotly:::getLevels(var)
+  dats <- lapply(seq_along(lvls), function(x) {
+    cbind(dat[var %in% lvls[seq(1, x)], ], frame = lvls[[x]])
+  })
+  dplyr::bind_rows(dats)
+}
+
+df_2019<-df_icms %>% filter(uf == input$uf) %>% arrange(mes_ano) %>% group_by(mes_ano) %>% summarise(icms = sum(valor)) %>% mutate (data_decimal = decimal_date(mes_ano))
+df <- df_2019  %>% mutate(icms = icms/1000000000)
+
+df$ID <- seq.int(nrow(df))
+
+df <- df %>% accumulate_by(~data_decimal)
+fig <- df %>% plot_ly(
+  x = ~data_decimal, 
+  y = ~icms, 
+  frame = ~frame,
+  type = 'scatter', 
+  mode = 'lines', 
+  fill = 'tozeroy', 
+  fillcolor='#03e7fc',
+  line = list(color = '#fc0303'),
+  text = ~paste("R$ ", round(icms, digits = 2)," BI" ), 
+  hoverinfo = 'text')
+fig <- fig %>% layout(
+  xaxis = list(
+    title = "",
+    zeroline = F
+  ),
+  yaxis = list(
+    title = "R$ Bi",
+    zeroline = F
+  )
+) 
+fig <- fig %>% animation_opts(
+  frame = 100, 
+  transition = 0, 
+  redraw = FALSE
+)
+fig <- fig %>% animation_slider(
+  hide = T
+)
+fig <- fig %>% animation_button(
+  x = 1, xanchor = "right", y = 0, yanchor = "botton"
+)
+
+fig
+
+})
+```
