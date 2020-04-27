@@ -15,16 +15,19 @@ options(scipen=999)
 
 ```{r setup, include=FALSE}
 library(flexdashboard)
-library(shiny)
 library(tidyverse)
-library(readxl)
 library(DT)
 library(plotly)
 library(lubridate)
 library(shiny)
+library(vroom)
+library(ggplot2)
 
 ```
 
+```{r eval=FALSE, include=FALSE}
+profvis(expr = {
+```
 
 
 ```{r funcoes}
@@ -40,7 +43,7 @@ escala <- function(x){case_when(
   TRUE ~ "maior que trilhão"
 )}
 
-
+ escala <- Vectorize(escala)
 
 
 divisor <- function(x){case_when(
@@ -51,6 +54,8 @@ divisor <- function(x){case_when(
   abs(x) >= 1000000000000  & abs(x) < 1000000000000000 ~ round (x/1000000000000, digits = 2),
   TRUE ~ x
 )}
+
+ divisor <- Vectorize(divisor)
 ```
 
 ```{r}
@@ -59,9 +64,11 @@ divisor <- function(x){case_when(
 
 # excluir as UF que não disponibilizaram o demonstrativo no SICONFI
 
-df_icms<-read_csv("df_icms2.csv") %>% filter (uf != "RR")
+df_icms<-vroom("df_icms2.csv") 
 
-df_icms_bimestre<- read_csv("df_icms_bimestre.csv") %>% filter (uf != "RR")
+df_icms <-df_icms %>%  filter (uf != "RR")
+
+df_icms_bimestre<- vroom("df_icms_bimestre.csv") %>% filter (uf != "RR")
 ```
 
 
@@ -118,7 +125,7 @@ flexdashboard::renderValueBox({
     paste0("R$ ",  divisor(valor), " ", escala(valor)), 
       "evolução em R$ ", 
     # ajustar a cor de acordo com o valor da evolução em reais
-      color = if (valor <= 0) "red" else "blue"
+      color = if_else (valor <= 0, "red" , "blue")
     )
   })
 
@@ -134,7 +141,7 @@ flexdashboard::renderValueBox({
       paste0(percentual,"%"),
       "evolução percentual ",
     # ajustar a cor de acordo com o valor da evolução percentual
-      color = if (percentual <= 0) "red" else "blue"
+      color = if_else (percentual <= 0, "red" , "blue")
     )
   })
 
@@ -303,6 +310,8 @@ selectInput("uf", label ="",
 # criar função reactive para reagir a alterações do filtro da UF
 
 bimestre <- reactive({df_icms_bimestre %>% filter (uf == input$uf)})
+
+bimestre <- Vectorize(bimestre)
 ```
 
 
@@ -357,7 +366,7 @@ flexdashboard::renderValueBox({
        # utilizar funções divisor() e escala () para converter automaticamente valores para milhar, milhão, bilhão...  
        paste0("R$ ",  divisor(valor), " ", escala(valor)), 
        "evolução em R$", 
-       color = if (valor <= 0) "red" else "blue"
+       color = if_else (valor <= 0, "red" , "blue")
     )
   })
 
@@ -370,7 +379,7 @@ flexdashboard::renderValueBox({
     valueBox(
        paste0(bimestre()$percentual,"%"),
       "evolução percentual",
-      color = if (bimestre()$percentual<= 0) "red" else "blue"
+      color = if_else (bimestre()$percentual<= 0, "red" , "blue")
     )
   })
 
@@ -465,9 +474,7 @@ Tabela com os dados
 #opção para baixar todos os dados: dica de Cristian E. Nuno
 #https://github.com/rstudio/DT/issues/267#issuecomment-347030730
 #https://github.com/cenuno/shiny/tree/master/DT-Download-All-Rows-Button#customizing-dt-download-button
-DTOutput("dados")
-   
- output$dados<- renderDT({
+renderDT({
   datatable((df_icms) %>% select(-rotulo, - mr, -mr_mes, - mes,- mes_ano, - populacao, - instituicao),
       extensions = 'Buttons',
       options = list( 
@@ -509,6 +516,7 @@ accumulate_by <- function(dat, var) {
   })
   dplyr::bind_rows(dats)
 }
+
 
 df_2019<-df_icms %>% filter(uf == input$uf) %>% arrange(mes_ano) %>% group_by(mes_ano) %>% summarise(icms = sum(valor)) %>% mutate (data_decimal = decimal_date(mes_ano))
 df <- df_2019  %>% mutate(icms = icms/1000000000)
@@ -553,3 +561,8 @@ fig
 
 })
 ```
+
+```{r eval=FALSE, include=FALSE}
+}, interval = 0.01, prof_output = "ice-prof")
+```
+

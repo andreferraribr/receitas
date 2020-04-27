@@ -13,6 +13,10 @@ options(scipen=999)
 ### Acesse os dados abertos (API) do Tesouro Nacional para obter os dado
 
 
+```{r}
+profvis(expr = {
+```
+
 
 
 Utilizei as libraries abaixo:
@@ -26,6 +30,11 @@ library(jsonlite)
 library(httr)
 library(purrr)
 library(tidyverse)
+library(lubridate)
+library(vroom)
+library(microbenchmark)
+library(profvis)
+library(ggplot2)
 ```
 ***         
 
@@ -50,6 +59,8 @@ f_json <- fromJSON(f_txt, flatten = FALSE)
 f_df <-as.data.frame(f_json[[1]]) 
 
 }
+
+json2df <- Vectorize(json2df)
 ```
 
 
@@ -61,6 +72,8 @@ A função bind_json2df() agrupa os relatórios individuais em uma única data f
 # função para juntar data frames
 
 bind_json2df = function(a){ map(a,json2df)}
+
+bind_json2df <- Vectorize(bind_json2df ) 
 ```
 
 A função relatorios() acessa as urls, baixa os arquivos JSON, transforma os arquivos individuais em data frames, agrupa as data frames em uma única data frame. 
@@ -71,6 +84,7 @@ A função relatorios() acessa as urls, baixa os arquivos JSON, transforma os ar
 # funcao para gerar df com os dados dos relatórios
 relatorios = function(a){map_dfr(bind_json2df(a), bind_rows)}
 
+relatorios <- Vectorize(relatorios)
 ```
   
    
@@ -83,9 +97,9 @@ Utilizei a função json2df para criar uma data frame com os dados dos entes da 
 ```{r, entes}
 # acessar url com dados dos entes
 
-entes<- json2df("http://apidatalake.tesouro.gov.br/ords/siconfi/tt/entes")
+#entes<- json2df("http://apidatalake.tesouro.gov.br/ords/siconfi/tt/entes")
 
-
+entes <- vroom("entes.csv")
 ```
   
       
@@ -278,7 +292,7 @@ extratos_relatorios<-extratos_relatorios%>%
 # obter a RGF a partir da URL
 rgf <-relatorios(rgf_url$url_api)
 
-rgf_vazio<- read_csv("rgf_vazio.csv")
+rgf_vazio<- vroom("rgf_vazio.csv")
 
 rgf<- rbind(rgf,rgf_vazio)
 
@@ -326,7 +340,7 @@ df_icms_api<-rreo %>%
 
 
 
-df_icms_base<- read_csv("df_icms_base.csv") 
+df_icms_base<- vroom("df_icms_base.csv") 
 
 
 
@@ -439,7 +453,7 @@ df_dcl<- rgf %>% filter(coluna == "Até o 1º Quadrimestre", conta == "% da DCL 
 ```{r}
 df_limites_api <- rbind(df_rcl, df_invest,  df_prev)
 
-df_limites_base<- read_csv("df_limites_base.csv")
+df_limites_base<- vroom("df_limites_base.csv")
 
 df_limites<- rbind.data.frame(df_limites_base, df_limites_api)
 
@@ -447,7 +461,12 @@ df_limites<- rbind.data.frame(df_limites_base, df_limites_api)
 
 #write_csv(df_limites,"df_limites.csv")
 ```
-  
+
+
+
+```{r}
+}, interval = 0.01, prof_output = "teste")
+```
 
 
 ##### Referências bacanas
