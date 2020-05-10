@@ -13,9 +13,6 @@ options(scipen=999)
 ### Acesse os dados abertos (API) do Tesouro Nacional para obter os dado
 
 
-```{r}
-profvis(expr = {
-```
 
 
 
@@ -39,6 +36,7 @@ library(ggplot2)
 ***         
 
 
+
 Criei a função json2df(). A função baixa o arquivo JSON e armazenar os dados em uma data frame.
 
 A função foi inspirada no código do Marcos F Silva https://www.rpubs.com/marcosfs2006/api_siconfi.
@@ -60,7 +58,7 @@ f_df <-as.data.frame(f_json[[1]])
 
 }
 
-json2df <- Vectorize(json2df)
+
 ```
 
 
@@ -73,7 +71,7 @@ A função bind_json2df() agrupa os relatórios individuais em uma única data f
 
 bind_json2df = function(a){ map(a,json2df)}
 
-bind_json2df <- Vectorize(bind_json2df ) 
+
 ```
 
 A função relatorios() acessa as urls, baixa os arquivos JSON, transforma os arquivos individuais em data frames, agrupa as data frames em uma única data frame. 
@@ -84,7 +82,7 @@ A função relatorios() acessa as urls, baixa os arquivos JSON, transforma os ar
 # funcao para gerar df com os dados dos relatórios
 relatorios = function(a){map_dfr(bind_json2df(a), bind_rows)}
 
-relatorios <- Vectorize(relatorios)
+
 ```
   
    
@@ -98,6 +96,8 @@ Utilizei a função json2df para criar uma data frame com os dados dos entes da 
 # acessar url com dados dos entes
 
 #entes<- json2df("http://apidatalake.tesouro.gov.br/ords/siconfi/tt/entes")
+
+# para deixar o código mais rápido, evitei acessar a API e carreguei o arquivo entes.csv. Só será necessário acessar a API se houver alteração na tabela de entes (por exemplo, criação/exclusão de municípios)
 
 entes <- vroom("entes.csv")
 ```
@@ -292,7 +292,9 @@ extratos_relatorios<-extratos_relatorios%>%
 # obter a RGF a partir da URL
 rgf <-relatorios(rgf_url$url_api)
 
+# carregar df vazia para contornar o problema da diferença de periodiciade. A RGF é publicada quadrimestralmente e o RREO e publicado bimestralmente. Logo, não a RGF nos bimestres ímpares.
 rgf_vazio<- vroom("rgf_vazio.csv")
+
 
 rgf<- rbind(rgf,rgf_vazio)
 
@@ -312,7 +314,7 @@ rreo <-relatorios(rreo_url$url_api)
 ```
 
 
-```{r}
+```{r eval=FALSE, include=FALSE}
 # obter os dados da Receita Corrente Líquida
 # anexo 3 DEMONSTRATIVO DA RECEITA CORRENTE LÍQUIDA
 
@@ -321,7 +323,7 @@ df_rcl<- rreo %>% filter( cod_conta == "ReceitasCorrentesLiquidasExcetoTransfere
 
 
 
-```{r}
+```{r eval=FALSE, include=FALSE}
 # obter valores da despesa liquidada com investimento
 # anexo 1 BALANÇO ORÇAMENTÁRIO
 
@@ -331,40 +333,57 @@ df_invest<- rreo %>% filter(coluna %in% c("DESPESAS LIQUIDADAS ATÉ O BIMESTRE (
 
 ```{r}
 
+
+# acessar a API e baixar os dados mais recentes (a partir de  2020)
 df_icms_api<-rreo %>%
   filter (cod_conta == "ICMSLiquidoExcetoTransferenciasEFUNDEB", startsWith(coluna, "<MR"))
 
-
-
-
-
-
-
+# carregar a base de dados do icms (valores de 2015 a 2019)
 df_icms_base<- vroom("df_icms_base.csv") 
 
 
-
+# criar df_icms juntando os dos dados base (2015 a 2019) e os mais recentes (2020)
 df_icms<- rbind(df_icms_base, df_icms_api)
 
-
+# filtrar colunas que começam com "<MR" (mês referência)
 df_icms<-df_icms %>%
   filter (startsWith(coluna, "<MR"))
 
 
+```
 
+
+![mr.png]
+
+```{r}
+
+# criar a variável mr para distinguir a peiordiciade do RREO (bimestral) e RREO simplificado (quadrimestral)
 df_icms<- df_icms %>% 
   mutate (mr = case_when(
   periodicidade == "Q"  ~ periodo*4,
   periodicidade == "B"  ~ periodo*2
 ))
 
+# relendo o código, percebi que poderia ter escolhido nomes melhores para as variáveis mr, mr_mes, mes e mes_ano. Ficou um pouco confuso.
 
 df_icms<- df_icms %>% 
+  # transformar mr em integer
   mutate(mr = as.integer(mr)) %>% 
+  # criar a variável mr_mes. Por exemplo, obter o número -8 apartir do registro "<MR-8>" da variável coluna. Para tanto substituir os strings que antecedem e sucedem o número. O objetivo é identifcar quantos meses se passaram entre o mr_mes e o mr (mes de referência).
+  # por exemplo, se o mr é 12, ou seja um RREO publicado no 6° bimestre, um mr_mes é -8 representa o mês de abril (12-8 = 4).
+
   mutate (mr_mes = str_replace_all(coluna, c("<MR" = "", ">" = ""))) %>% 
+  # criar a variável mês a partir da variável mr_mes.
+  # a série histórica dos últimos 12 meses. 
   mutate (mes = case_when(
+    # mr_mes == "" (mr_mes é igual à vazio, quando mr_mes é o próprio mês de referência, o mês do demonstrativo. Por exemplo, no 6° bimestre o mr_mes é igual a 12)
     mr_mes == "" ~ mr,
-    TRUE ~  mr + (as.integer(mr_mes)))) %>% 
+    #  nos demias casos, o mes é igual o mês de referência - mr_mes.
+    TRUE ~  mr + (as.integer(mr_mes)))) %>%
+  # somente para o RREO de enceramento de exercício a variável mes sempre será maior que zero.
+  # nos outros períodos, a variável mes pode ser igual ou menor que zero.
+  # Por exemplo, no RREO do primeiro bimestre o mr é igual a 2. Contudo o mr_mes varia de -1 a -11. Assim, só os meses de fevereiro (o próprio mr igual a e) e janeiro (2 - 1) teriam valor maior que 0. No cado de mr_mes igual a -3 teríamos um mes negativo, algo impossível.
+  # deve ter uma solução mais elegante, mas optei por simplesmente mater a variável mes quando ela é maior que zero.
   filter(mes > 0) %>% 
   mutate(mes_ano= paste0(exercicio,"-",mes,"-01")) %>% 
   mutate (mes_ano = (as.Date(mes_ano))) 
@@ -401,7 +420,7 @@ write_csv(df_icms,"df_icms2.csv")
 
 
 
-```{r}
+```{r eval=FALSE, include=FALSE}
 # obter os dados do resultado previdenciário
 # aqui eu penei um pouquinho, pois os dados de BA de 2016 e de RN de 2015 e 2018 tinham uma descrição própria na variável coluna.
 
@@ -431,7 +450,7 @@ df_prev<- df_prev%>% mutate (cores = if_else(valor > 0, "superavitário","defici
 
 
 
-```{r}
+```{r eval=FALSE, include=FALSE}
 
 
 
@@ -440,7 +459,7 @@ df_pessoal<- rgf %>% filter(startsWith(rgf$coluna, "%"),startsWith(cod_conta , "
 ```
 
 
-```{r}
+```{r eval=FALSE, include=FALSE}
 
 
 df_dcl<- rgf %>% filter(coluna == "Até o 1º Quadrimestre", conta == "% da DCL sobre a RCL (III/RCL)") %>% group_by(instituicao, uf, exercicio, coluna, conta, periodo, periodicidade)   %>% summarise(valor = valor)%>% mutate (cores = if_else(valor < 200,"dentro do limite","acima do limite"))
@@ -450,7 +469,7 @@ df_dcl<- rgf %>% filter(coluna == "Até o 1º Quadrimestre", conta == "% da DCL 
 
 ```
 
-```{r}
+```{r eval=FALSE, include=FALSE}
 df_limites_api <- rbind(df_rcl, df_invest,  df_prev)
 
 df_limites_base<- vroom("df_limites_base.csv")
@@ -463,10 +482,7 @@ df_limites<- rbind.data.frame(df_limites_base, df_limites_api)
 ```
 
 
-
-```{r}
-}, interval = 0.01, prof_output = "teste")
-```
+`
 
 
 ##### Referências bacanas

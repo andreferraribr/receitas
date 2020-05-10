@@ -25,9 +25,6 @@ library(ggplot2)
 
 ```
 
-```{r eval=FALSE, include=FALSE}
-profvis(expr = {
-```
 
 
 ```{r funcoes}
@@ -66,9 +63,9 @@ divisor <- function(x){case_when(
 
 df_icms<-vroom("df_icms2.csv") 
 
-df_icms <-df_icms %>%  filter (uf != "RR")
+df_icms <-df_icms %>%   filter (uf != "ES")
 
-df_icms_bimestre<- vroom("df_icms_bimestre.csv") %>% filter (uf != "RR")
+df_icms_bimestre<- vroom("df_icms_bimestre.csv") %>% filter (uf != "ES")
 ```
 
 
@@ -297,7 +294,7 @@ Selecione a UF {.sidebar data-height=30}
 
 selectInput("uf", label ="", 
     choices = unique(df_icms_bimestre$uf), 
-    selected = "SC")
+    selected = "AP")
 
 
 
@@ -531,8 +528,8 @@ fig <- df %>% plot_ly(
   type = 'scatter', 
   mode = 'lines', 
   fill = 'tozeroy', 
-  fillcolor='#03e7fc',
-  line = list(color = '#fc0303'),
+  fillcolor='#ced5e0',
+  line = list(color = 'red'),
   text = ~paste("R$ ", round(icms, digits = 2)," BI" ), 
   hoverinfo = 'text')
 fig <- fig %>% layout(
@@ -560,9 +557,5 @@ fig <- fig %>% animation_button(
 fig
 
 })
-```
-
-```{r eval=FALSE, include=FALSE}
-}, interval = 0.01, prof_output = "ice-prof")
 ```
 
