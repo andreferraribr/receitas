@@ -3,6 +3,8 @@ title: "ICMS (exceto DF e RR)"
 output: 
   flexdashboard::flex_dashboard:
     orientation: rows
+    source_code: https://github.com/andreferraribr/receitas
+    social: [ "twitter", "facebook", "menu" ]
   
 
 runtime: shiny
