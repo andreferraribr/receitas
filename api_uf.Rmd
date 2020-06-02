@@ -29,8 +29,6 @@ library(purrr)
 library(tidyverse)
 library(lubridate)
 library(vroom)
-library(microbenchmark)
-library(profvis)
 library(ggplot2)
 ```
 ***         
@@ -287,7 +285,7 @@ extratos_relatorios<-extratos_relatorios%>%
 
 # selecionar o RGF (tipo == "RGF") do terceiro quadrimenestre (periodo ==1) do poder executivo (poder == "E")
  rgf_url<-extratos_relatorios%>%
-  filter(  tipo == "RGF", poder =="E", periodo == 1)
+  filter(  tipo == "RGF", poder =="E", periodo == 2)
 
 # obter a RGF a partir da URL
 rgf <-relatorios(rgf_url$url_api)
@@ -304,9 +302,9 @@ rgf<- rbind(rgf,rgf_vazio)
 # disponibilizei o arquivo para facilitar a sua vida
 
 
-# selecionar o RREO (tipo == "RREO") do primeiro bimenestre (periodo == 1) do poder executivo (poder == "E")
+# selecionar o RREO (tipo == "RREO") do primeiro bimenestre (periodo == 2) do poder executivo (poder == "E")
 rreo_url<-extratos_relatorios%>%
- filter(  tipo == "RREO", poder =="E", periodo == 1)
+ filter(  tipo == "RREO", poder =="E", periodo == 2)
 
 # obter o RREO a partir da URL
 rreo <-relatorios(rreo_url$url_api)
@@ -401,7 +399,7 @@ day(df_icms$mes_ano_end) <- days_in_month(df_icms$mes_ano)
 # criar df para comparar dois períodos. Neste caso comparamos o segundo bimeste de 2019 com o segundo bimestre de 2018
 df_icms_bimestre<-df_icms %>%
                   # filtrar meses e anos
-                  filter(month(mes_ano) %in% c(1,2), exercicio %in% c(2020,2019)) %>% 
+                  filter(month(mes_ano) %in% c(4), exercicio %in% c(2020,2019)) %>% 
                   # agrupar por UF e ano (exercício)
                   group_by(uf, exercicio) %>%
                   # somar o valor do período (neste caso o valor do segundo bimestre)
