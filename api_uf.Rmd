@@ -285,7 +285,7 @@ extratos_relatorios<-extratos_relatorios%>%
 
 # selecionar o RGF (tipo == "RGF") do terceiro quadrimenestre (periodo ==1) do poder executivo (poder == "E")
  rgf_url<-extratos_relatorios%>%
-  filter(  tipo == "RGF", poder =="E", periodo == 2)
+  filter(  tipo == "RGF", poder =="E", periodo == 1)
 
 # obter a RGF a partir da URL
 rgf <-relatorios(rgf_url$url_api)
@@ -302,9 +302,9 @@ rgf<- rbind(rgf,rgf_vazio)
 # disponibilizei o arquivo para facilitar a sua vida
 
 
-# selecionar o RREO (tipo == "RREO") do primeiro bimenestre (periodo == 2) do poder executivo (poder == "E")
+# selecionar o RREO (tipo == "RREO") do primeiro bimenestre (periodo == 3) do poder executivo (poder == "E")
 rreo_url<-extratos_relatorios%>%
- filter(  tipo == "RREO", poder =="E", periodo == 2)
+ filter(  tipo == "RREO", poder =="E", periodo == 3)
 
 # obter o RREO a partir da URL
 rreo <-relatorios(rreo_url$url_api)
@@ -312,7 +312,7 @@ rreo <-relatorios(rreo_url$url_api)
 ```
 
 
-```{r eval=FALSE, include=FALSE}
+```{r}
 # obter os dados da Receita Corrente Líquida
 # anexo 3 DEMONSTRATIVO DA RECEITA CORRENTE LÍQUIDA
 
@@ -321,7 +321,7 @@ df_rcl<- rreo %>% filter( cod_conta == "ReceitasCorrentesLiquidasExcetoTransfere
 
 
 
-```{r eval=FALSE, include=FALSE}
+```{r}
 # obter valores da despesa liquidada com investimento
 # anexo 1 BALANÇO ORÇAMENTÁRIO
 
@@ -396,10 +396,10 @@ day(df_icms$mes_ano_end) <- days_in_month(df_icms$mes_ano)
 # https://lubridate.tidyverse.org/reference/guess_formats.html
 
 
-# criar df para comparar dois períodos. Neste caso comparamos o segundo bimeste de 2019 com o segundo bimestre de 2018
+# criar df para comparar dois períodos. Neste caso comparamos sexto mês "c(6)" 2020 com o sexto mês de 2020
 df_icms_bimestre<-df_icms %>%
                   # filtrar meses e anos
-                  filter(month(mes_ano) %in% c(4), exercicio %in% c(2020,2019)) %>% 
+                  filter(month(mes_ano) %in% c(6), exercicio %in% c(2020,2019)) %>% 
                   # agrupar por UF e ano (exercício)
                   group_by(uf, exercicio) %>%
                   # somar o valor do período (neste caso o valor do segundo bimestre)
@@ -418,7 +418,7 @@ write_csv(df_icms,"df_icms2.csv")
 
 
 
-```{r eval=FALSE, include=FALSE}
+```{r}
 # obter os dados do resultado previdenciário
 # aqui eu penei um pouquinho, pois os dados de BA de 2016 e de RN de 2015 e 2018 tinham uma descrição própria na variável coluna.
 
@@ -447,37 +447,6 @@ df_prev<- df_prev%>% mutate (cores = if_else(valor > 0, "superavitário","defici
 ```
 
 
-
-```{r eval=FALSE, include=FALSE}
-
-
-
-df_pessoal<- rgf %>% filter(startsWith(rgf$coluna, "%"),startsWith(cod_conta , "DespesaComPessoalTotal")) %>% group_by(instituicao, uf, exercicio, coluna, conta, periodo, periodicidade)  %>% summarise(valor = valor) %>% mutate (cores = if_else(valor < 49, "dentro do limite","acima do limite"))
-
-```
-
-
-```{r eval=FALSE, include=FALSE}
-
-
-df_dcl<- rgf %>% filter(coluna == "Até o 1º Quadrimestre", conta == "% da DCL sobre a RCL (III/RCL)") %>% group_by(instituicao, uf, exercicio, coluna, conta, periodo, periodicidade)   %>% summarise(valor = valor)%>% mutate (cores = if_else(valor < 200,"dentro do limite","acima do limite"))
-
-
-(df_dcl %>% group_by(uf) %>% summarise(q =n()))
-
-```
-
-```{r eval=FALSE, include=FALSE}
-df_limites_api <- rbind(df_rcl, df_invest,  df_prev)
-
-df_limites_base<- vroom("df_limites_base.csv")
-
-df_limites<- rbind.data.frame(df_limites_base, df_limites_api)
-
-
-
-#write_csv(df_limites,"df_limites.csv")
-```
 
 
 `
